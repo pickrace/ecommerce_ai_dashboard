@@ -12,7 +12,7 @@ def clean_data():
     df.fillna('', inplace=True) # заповнення пропущених значень
 
     if {"Quantity", "UnitPrice"}.issubset(df.columns):
-        df["TotalPrice"] = df["Quantity"] * df["UnitPrice"].round(1)  # робимо нову колонку
+        df["TotalPrice"] = (df["Quantity"] * df["UnitPrice"]).round(1)  # робимо нову колонку
 
     if "InvoiceDate" in df.columns:
         df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors='coerce', format="%d/%m/%Y %H:%M") # адаптуємо дату
