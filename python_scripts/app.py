@@ -1,46 +1,45 @@
 # app.py
-
 import streamlit as st
 import pandas as pd
-import os
-import seaborn as sns
 import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
-# Додаткова конфігурація Streamlit
-st.set_page_config(page_title="E-commerce AI Dashboard", layout="wide")
+# Load data
+DATA_PATH = os.path.join('data', 'clean_data.csv')
+df = pd.read_csv(DATA_PATH, parse_dates=['InvoiceDate'], encoding='ISO-8859-1')
 
-# Шлях до даних
-DATA_PATH = os.path.join("data", "clean_data.csv")
-df = pd.read_csv(DATA_PATH, parse_dates=["InvoiceDate"], encoding="ISO-8859-1")
+# App title
+st.set_page_config(page_title="E-Commerce Dashboard", layout="wide")
+st.title("Інтерактивна аналітика e-commerce")
 
-st.title("E-commerce Dashboard with AI Agent")
+# Sidebar filters
+st.sidebar.header("🔎 Фільтри")
+country = st.sidebar.selectbox("Обрати країну:", sorted(df['Country'].unique()))
+date_range = st.sidebar.date_input("Обрати діапазон дат:",
+    [df['InvoiceDate'].min(), df['InvoiceDate'].max()])
 
-# KPI блок
-col1, col2, col3 = st.columns(3)
-col1.metric("Загальний дохід", f"£{df['TotalPrice'].sum():,.2f}")
-col2.metric("Замовлень", df["InvoiceNo"].nunique())
-col3.metric("Клієнтів", df["CustomerID"].nunique())
+# Фільтрація даних
+df_filtered = df[(df['Country'] == country) &
+                 (df['InvoiceDate'] >= pd.to_datetime(date_range[0])) &
+                 (df['InvoiceDate'] <= pd.to_datetime(date_range[1]))]
 
-st.markdown("---")
+# KPIs
+total_sales = df_filtered['TotalPrice'].sum()
+total_invoices = df_filtered['InvoiceNo'].nunique()
 
-# Фільтр по країні (сайдбар)
-countries = df["Country"].unique().tolist()
-selected_countries = st.sidebar.multiselect("Оберіть країни:", countries, default=["United Kingdom"])
+col1, col2 = st.columns(2)
+col1.metric("Загальний дохід", f"£{total_sales:,.2f}")
+col2.metric("Кількість замовлень", f"{total_invoices}")
 
-filtered_df = df[df["Country"].isin(selected_countries)]
+# Visualization 1: Дохід по місяцях
+st.subheader("Динаміка доходу")
+df_filtered['Month'] = df_filtered['InvoiceDate'].dt.to_period("M").astype(str)
+monthly_sales = df_filtered.groupby("Month")["TotalPrice"].sum()
 
-# Графік: дохід по країнах
-st.subheader("Дохід по країнах")
-revenue_by_country = (
-    filtered_df.groupby("Country")["TotalPrice"]
-    .sum()
-    .sort_values(ascending=False)
-)
-
-fig1, ax1 = plt.subplots(figsize=(10, 5))
-sns.barplot(x=revenue_by_country.index, y=revenue_by_country.values, palette="viridis", ax=ax1)
-ax1.set_xlabel("Країна")
-ax1.set_ylabel("Дохід")
-ax1.set_title("Дохід по країнах")
+fig, ax = plt.subplots(figsize=(10, 5))
+sns.lineplot(x=monthly_sales.index, y=monthly_sales.values, marker="o", ax=ax)
+ax.set_title("Загальний дохід по місяцях")
+ax.set_ylabel("Дохід")
 plt.xticks(rotation=45)
-st.pyplot(fig1)
+st.pyplot(fig)
