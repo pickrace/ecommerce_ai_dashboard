@@ -30,7 +30,7 @@ selected_countries = st.sidebar.multiselect("Оберіть країни:", coun
 filtered_df = df[df["Country"].isin(selected_countries)]
 
 # Графік: дохід по країнах
-st.subheader("🌍 Дохід по країнах")
+st.subheader("Дохід по країнах")
 revenue_by_country = (
     filtered_df.groupby("Country")["TotalPrice"]
     .sum()
