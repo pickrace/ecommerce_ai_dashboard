@@ -1,83 +1,78 @@
-# app.py
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import os
 
-# ==== Налаштування сторінки ====
-st.set_page_config(page_title="E-Commerce Dashboard", layout="wide")
-st.title("E-Commerce AI Dashboard")
+st.set_page_config(page_title="Ecommerce Dashboard", layout="wide")
 
-# ==== Завантаження даних ====
+# === Завантаження даних ===
 DATA_PATH = os.path.join('data', 'clean_data.csv')
-df = pd.read_csv(DATA_PATH, parse_dates=['InvoiceDate'], encoding='ISO-8859-1')
+df = pd.read_csv(DATA_PATH, parse_dates=["InvoiceDate"], encoding='ISO-8859-1')
+df['Month'] = df['InvoiceDate'].dt.to_period('M').astype(str)
+df['Hour'] = df['InvoiceDate'].dt.hour
 
-# ==== Сайдбар-фільтри ====
-st.sidebar.header("🔎 Фільтри")
-selected_country = st.sidebar.selectbox("Країна", sorted(df['Country'].unique()))
-start_date, end_date = st.sidebar.date_input("Діапазон дат", [df['InvoiceDate'].min(), df['InvoiceDate'].max()])
+st.title("Ecommerce AI Dashboard")
+st.markdown("Інтерактивна панель для аналізу електронної комерції")
 
-# ==== Фільтрація ====
-df_filtered = df[
-    (df['Country'] == selected_country) &
-    (df['InvoiceDate'] >= pd.to_datetime(start_date)) &
-    (df['InvoiceDate'] <= pd.to_datetime(end_date))
-]
+# === Вкладки ===
+tabs = st.tabs([
+    "Дохід по країнах",
+    "Дохід по місяцях",
+    "Топ-10 товарів",
+    "Розподіл по клієнтах",
+    "Продажі по годинах",
+    "Найменші продажі (країни)"
+])
 
-# ==== KPI Панель ====
-total_sales = df_filtered['TotalPrice'].sum()
-unique_customers = df_filtered['CustomerID'].nunique()
-num_orders = df_filtered['InvoiceNo'].nunique()
+# === 1. Дохід по країнах ===
+with tabs[0]:
+    st.subheader("Загальний дохід по країнах")
+    revenue = df.groupby('Country')["TotalPrice"].sum().sort_values(ascending=False)
+    fig = px.bar(
+        revenue.head(20).reset_index(),
+        x="Country", y="TotalPrice",
+        color="TotalPrice",
+        color_continuous_scale="viridis",
+        title="Дохід по країнах (топ 20)"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Загальний дохід", f"£{total_sales:,.2f}")
-col2.metric("Унікальні клієнти", unique_customers)
-col3.metric("Замовлення", num_orders)
+# === 2. Дохід по місяцях ===
+with tabs[1]:
+    st.subheader("Дохід по місяцях")
+    monthly = df.groupby("Month")["TotalPrice"].sum().reset_index()
+    fig = px.line(monthly, x="Month", y="TotalPrice", markers=True, title="Дохід по місяцях")
+    st.plotly_chart(fig, use_container_width=True)
 
-st.markdown("---")
+# === 3. Топ-10 товарів ===
+with tabs[2]:
+    st.subheader("Топ-10 товарів за доходом")
+    top = df.groupby("Description")["TotalPrice"].sum().sort_values(ascending=False).head(10).reset_index()
+    fig = px.bar(
+        top, x="TotalPrice", y="Description", orientation='h',
+        color="TotalPrice", color_continuous_scale="plasma",
+        title="Найприбутковіші товари"
+    )
+    fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+    st.plotly_chart(fig, use_container_width=True)
 
-# ==== Графік 1: Дохід по місяцях ====
-df_filtered['Month'] = df_filtered['InvoiceDate'].dt.to_period("M").astype(str)
-monthly_sales = df_filtered.groupby('Month')['TotalPrice'].sum().reset_index()
+# === 4. Розподіл доходу по клієнтах ===
+with tabs[3]:
+    st.subheader("Розподіл доходу по клієнтах")
+    customer_value = df.groupby("CustomerID")["TotalPrice"].sum().reset_index()
+    fig = px.histogram(customer_value, x="TotalPrice", nbins=40, title="Розподіл доходу")
+    st.plotly_chart(fig, use_container_width=True)
 
-fig1 = px.line(monthly_sales, x='Month', y='TotalPrice',
-               title="Дохід по місяцях", markers=True,
-               labels={"TotalPrice": "Дохід", "Month": "Місяць"})
+# === 5. Продажі по годинах ===
+with tabs[4]:
+    st.subheader("Продажі протягом доби")
+    hourly = df.groupby("Hour")["TotalPrice"].sum().reset_index()
+    fig = px.line(hourly, x="Hour", y="TotalPrice", markers=True, title="Дохід по годинах")
+    st.plotly_chart(fig, use_container_width=True)
 
-fig1.update_traces(line=dict(color="#0077b6", width=3))
-st.plotly_chart(fig1, use_container_width=True)
-
-# ==== Графік 2: Найпопулярніші товари ====
-top_products = df_filtered.groupby("Description")['Quantity'].sum().sort_values(ascending=False).head(10).reset_index()
-
-fig2 = px.bar(top_products, x='Quantity', y='Description',
-              orientation='h', title="Топ-10 товарів за кількістю",
-              color='Quantity', color_continuous_scale='blues')
-
-fig2.update_layout(yaxis={'categoryorder': 'total ascending'})
-st.plotly_chart(fig2, use_container_width=True)
-
-# ==== Графік 3: Дохід по днях тижня ====
-df_filtered['DayOfWeek'] = df_filtered['InvoiceDate'].dt.day_name()
-sales_by_day = df_filtered.groupby('DayOfWeek')['TotalPrice'].sum().reindex(
-    ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-).reset_index()
-
-fig3 = px.bar(sales_by_day, x='DayOfWeek', y='TotalPrice',
-              title="Дохід по днях тижня", text_auto=True)
-
-fig3.update_traces(marker_color="#90e0ef")
-st.plotly_chart(fig3, use_container_width=True)
-
-# ==== Графік 4: Кількість замовлень по годинах ====
-df_filtered['Hour'] = df_filtered['InvoiceDate'].dt.hour
-orders_by_hour = df_filtered.groupby('Hour')['InvoiceNo'].nunique().reset_index()
-
-fig4 = px.area(orders_by_hour, x='Hour', y='InvoiceNo',
-               title="Замовлення по годинах",
-               labels={"InvoiceNo": "Кількість замовлень"})
-
-fig4.update_traces(line_color="#00b4d8", fill='tozeroy')
-st.plotly_chart(fig4, use_container_width=True)
+# === 6. Найменші продажі (країни) ===
+with tabs[5]:
+    st.subheader("Країни з найменшими доходами")
+    least = df.groupby('Country')["TotalPrice"].sum().sort_values(ascending=True).head(5).reset_index()
+    fig = px.pie(least, names='Country', values='TotalPrice', title='Найменші продажі по країнах')
+    st.plotly_chart(fig, use_container_width=True)
