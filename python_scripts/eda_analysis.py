@@ -1,71 +1,40 @@
-# eda_analysis.py
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
-def load_clean_data():
-    df = pd.read_csv("data/clean_data.csv", parse_dates=["InvoiceDate"])
-    return df
-
-# KPI-індикатори
-def kpi_cards(df):
-    total_revenue = df["TotalPrice"].sum()
-    total_orders = df["InvoiceNo"].nunique()
-    total_customers = df["CustomerID"].nunique()
-
-    kpi = go.Figure()
-
-    kpi.add_trace(go.Indicator(
-        mode="number",
-        value=total_revenue,
-        title={"text": "Total Revenue"},
-        number={"prefix": "$"},
-        domain={"row": 0, "column": 0}
-    ))
-
-    kpi.add_trace(go.Indicator(
-        mode="number",
-        value=total_orders,
-        title={"text": "Orders"},
-        domain={"row": 0, "column": 1}
-    ))
-
-    kpi.add_trace(go.Indicator(
-        mode="number",
-        value=total_customers,
-        title={"text": "Unique Customers"},
-        domain={"row": 0, "column": 2}
-    ))
-
-    kpi.update_layout(grid={"rows": 1, "columns": 3}, height=200, margin={"t": 20, "b": 0})
-    return kpi
-
-
-def revenue_by_country(df, top_n=10):
-    top = df.groupby("Country")["TotalPrice"].sum().sort_values(ascending=False).head(top_n).reset_index()
-    fig = px.bar(top, x="Country", y="TotalPrice", title="🌍 Revenue by Country", text_auto=".2s")
-    fig.update_layout(template="plotly_white")
+# Графік: Дохід по країнах
+def plot_revenue_by_country(df):
+    df_country = df.groupby('Country')['TotalPrice'].sum().sort_values(ascending=False).reset_index()
+    fig = px.bar(df_country, x='Country', y='TotalPrice',
+                 title='Сумарний дохід по країнах',
+                 color='TotalPrice', height=400)
     return fig
 
-
-def revenue_over_time(df):
-    df_time = df.groupby(df["InvoiceDate"].dt.to_period("M"))["TotalPrice"].sum().reset_index()
-    df_time["InvoiceDate"] = df_time["InvoiceDate"].dt.to_timestamp()
-    fig = px.line(df_time, x="InvoiceDate", y="TotalPrice", title="Monthly Revenue Trend")
-    fig.update_traces(mode="lines+markers")
+# Графік: Продажі по часу
+def plot_sales_over_time(df):
+    df_time = df.resample('M', on='InvoiceDate')['TotalPrice'].sum().reset_index()
+    fig = px.line(df_time, x='InvoiceDate', y='TotalPrice',
+                  title='Динаміка продажів по місяцях',
+                  markers=True)
     return fig
 
-
-def top_products(df, top_n=10):
-    top = df.groupby("Description")["TotalPrice"].sum().sort_values(ascending=False).head(top_n).reset_index()
-    fig = px.bar(top, x="TotalPrice", y="Description", orientation="h", title="Top Products by Revenue")
-    fig.update_layout(template="plotly_white", yaxis={"categoryorder": "total ascending"})
+# Графік: Топ-товари
+def plot_top_products(df, top_n=10):
+    top_products = df.groupby('Description')['TotalPrice'].sum().sort_values(ascending=False).head(top_n).reset_index()
+    fig = px.bar(top_products, x='TotalPrice', y='Description', orientation='h',
+                 title=f'Топ {top_n} товарів по доходу', height=450)
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
     return fig
 
+# Графік: Heatmap день × година
+def plot_heatmap(df):
+    df['Hour'] = df['InvoiceDate'].dt.hour
+    df['DayOfWeek'] = df['InvoiceDate'].dt.day_name()
+    heatmap_data = df.groupby(['DayOfWeek', 'Hour'])['TotalPrice'].sum().reset_index()
+    pivot_table = heatmap_data.pivot(index='DayOfWeek', columns='Hour', values='TotalPrice')
+    ordered_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    pivot_table = pivot_table.reindex(ordered_days)
 
-def orders_by_hour(df):
-    df["Hour"] = df["InvoiceDate"].dt.hour
-    hourly = df.groupby("Hour")["TotalPrice"].sum().reset_index()
-    fig = px.area(hourly, x="Hour", y="TotalPrice", title="Revenue by Hour of Day")
-    fig.update_layout(template="plotly_white")
+    fig = px.imshow(pivot_table, aspect="auto", color_continuous_scale='Blues',
+                    labels=dict(x="Година", y="День тижня", color="Дохід"),
+                    title="Теплова карта продажів (день × година)")
     return fig
