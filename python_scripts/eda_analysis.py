@@ -1,79 +1,71 @@
+# eda_analysis.py
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
+import plotly.express as px
+import plotly.graph_objects as go
 
-# === Завантаження даних ===
-DATA_PATH = os.path.join('data', 'clean_data.csv')
-df = pd.read_csv(DATA_PATH, parse_dates=["InvoiceDate"], encoding='ISO-8859-1')
+def load_clean_data():
+    df = pd.read_csv("data/clean_data.csv", parse_dates=["InvoiceDate"])
+    return df
 
-# === Попередня обробка ===
-df['Month'] = df['InvoiceDate'].dt.to_period('M').astype(str)
-df['Hour'] = df['InvoiceDate'].dt.hour
+# KPI-індикатори
+def kpi_cards(df):
+    total_revenue = df["TotalPrice"].sum()
+    total_orders = df["InvoiceNo"].nunique()
+    total_customers = df["CustomerID"].nunique()
 
-# === 1. Загальний дохід по країнах (barplot) ===
-def plot_revenue_by_country():
-    revenue = df.groupby('Country')["TotalPrice"].sum().sort_values(ascending=False)
-    fig, ax = plt.subplots(figsize=(14, 6))
-    sns.barplot(x=revenue.index, y=revenue.values, ax=ax, palette="crest")
-    ax.set_title("Загальний дохід по країнах", fontsize=16)
-    ax.set_ylabel("Дохід")
-    ax.set_xlabel("Країна")
-    plt.xticks(rotation=90)
-    plt.tight_layout()
+    kpi = go.Figure()
+
+    kpi.add_trace(go.Indicator(
+        mode="number",
+        value=total_revenue,
+        title={"text": "Total Revenue"},
+        number={"prefix": "$"},
+        domain={"row": 0, "column": 0}
+    ))
+
+    kpi.add_trace(go.Indicator(
+        mode="number",
+        value=total_orders,
+        title={"text": "Orders"},
+        domain={"row": 0, "column": 1}
+    ))
+
+    kpi.add_trace(go.Indicator(
+        mode="number",
+        value=total_customers,
+        title={"text": "Unique Customers"},
+        domain={"row": 0, "column": 2}
+    ))
+
+    kpi.update_layout(grid={"rows": 1, "columns": 3}, height=200, margin={"t": 20, "b": 0})
+    return kpi
+
+
+def revenue_by_country(df, top_n=10):
+    top = df.groupby("Country")["TotalPrice"].sum().sort_values(ascending=False).head(top_n).reset_index()
+    fig = px.bar(top, x="Country", y="TotalPrice", title="🌍 Revenue by Country", text_auto=".2s")
+    fig.update_layout(template="plotly_white")
     return fig
 
-# === 2. Дохід по місяцях (lineplot) ===
-def plot_monthly_revenue():
-    monthly = df.groupby("Month")["TotalPrice"].sum()
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.lineplot(x=monthly.index, y=monthly.values, marker='o', ax=ax, color='navy')
-    ax.set_title("Дохід по місяцях", fontsize=16)
-    ax.set_ylabel("Дохід")
-    ax.set_xlabel("Місяць")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+
+def revenue_over_time(df):
+    df_time = df.groupby(df["InvoiceDate"].dt.to_period("M"))["TotalPrice"].sum().reset_index()
+    df_time["InvoiceDate"] = df_time["InvoiceDate"].dt.to_timestamp()
+    fig = px.line(df_time, x="InvoiceDate", y="TotalPrice", title="Monthly Revenue Trend")
+    fig.update_traces(mode="lines+markers")
     return fig
 
-# === 3. Топ-10 товарів (horizontal barplot) ===
-def plot_top_products():
-    top = df.groupby("Description")["TotalPrice"].sum().sort_values(ascending=False).head(10)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(x=top.values, y=top.index, ax=ax, palette="flare")
-    ax.set_title("Топ-10 товарів за доходом", fontsize=16)
-    ax.set_xlabel("Дохід")
-    ax.set_ylabel("Товар")
-    plt.tight_layout()
+
+def top_products(df, top_n=10):
+    top = df.groupby("Description")["TotalPrice"].sum().sort_values(ascending=False).head(top_n).reset_index()
+    fig = px.bar(top, x="TotalPrice", y="Description", orientation="h", title="Top Products by Revenue")
+    fig.update_layout(template="plotly_white", yaxis={"categoryorder": "total ascending"})
     return fig
 
-# === 4. Розподіл доходу на клієнта (histogram) ===
-def plot_customer_distribution():
-    customer_value = df.groupby("CustomerID")["TotalPrice"].sum()
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.histplot(customer_value, bins=40, kde=True, ax=ax, color='purple')
-    ax.set_title("Розподіл доходу на клієнта", fontsize=16)
-    ax.set_xlabel("Загальний дохід")
-    ax.set_ylabel("Кількість клієнтів")
-    plt.tight_layout()
-    return fig
 
-# === 5. Продажі протягом доби (hourly pattern, lineplot) ===
-def plot_hourly_sales():
-    hourly = df.groupby("Hour")["TotalPrice"].sum()
-    fig, ax = plt.subplots(figsize=(10, 5))
-    sns.lineplot(x=hourly.index, y=hourly.values, marker='o', ax=ax, color='darkgreen')
-    ax.set_title("Активність продажів по годинах", fontsize=16)
-    ax.set_xlabel("Година")
-    ax.set_ylabel("Дохід")
-    plt.xticks(range(0, 24))
-    plt.grid(True, linestyle="--", alpha=0.5)
-    plt.tight_layout()
-    return fig
-
-# === 6. Країни з найменшими продажами (pie chart) ===
-def plot_least_sales_countries():
-    country_sum = df.groupby('Country')["TotalPrice"].sum().sort_values().head(5)
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(country_sum.values, labels=country_sum.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette("pastel"))
-    ax.set_title("Країни з найменшими продажами", fontsize=14)
+def orders_by_hour(df):
+    df["Hour"] = df["InvoiceDate"].dt.hour
+    hourly = df.groupby("Hour")["TotalPrice"].sum().reset_index()
+    fig = px.area(hourly, x="Hour", y="TotalPrice", title="Revenue by Hour of Day")
+    fig.update_layout(template="plotly_white")
     return fig
