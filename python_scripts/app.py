@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from ai_agent import display_chat
 from eda_analysis import (
     plot_revenue_by_country,
     plot_sales_over_time,
@@ -64,3 +65,8 @@ st.plotly_chart(plot_top_products(df_filtered), use_container_width=True)
 
 st.subheader("Теплова карта активності")
 st.plotly_chart(plot_heatmap(df_filtered), use_container_width=True)
+
+#Розділ для чат-бота
+st.divider()
+st.subheader("AI Assistant")
+display_chat()
